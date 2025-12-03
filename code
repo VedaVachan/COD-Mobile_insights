@@ -1,1 +1,524 @@
+# CODM Multiplayer Dashboard — React + Flask + Plotly (Render-ready)
+
+This repository contains a full, ready-to-paste set of files for a professional Multiplayer Analytics Dashboard using React + Plotly (frontend) and Flask (backend). Paste these files into a new GitHub repository with the same structure and then deploy to Render or run locally.
+
+---
+
+## Repository structure (files included below)
+
+```
+codm-dashboard/
+├── .gitignore
+├── README.md
+├── render.yaml
+├── backend/
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── Procfile
+│   └── data/vedas_5match_stats.csv
+└── frontend/
+    ├── package.json
+    ├── vite.config.js
+    ├── index.html
+    └── src/
+        ├── main.jsx
+        ├── App.jsx
+        ├── api.js
+        ├── styles.css
+        └── components/
+            ├── SummaryCards.jsx
+            ├── TrendChart.jsx
+            ├── MatchTimeline.jsx
+            └── MapPerformance.jsx
+```
+
+---
+
+## File contents — copy each file exactly into your repo
+
+---
+
+### .gitignore
+
+```
+node_modules/
+frontend/dist/
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+```
+
+---
+
+### README.md
+
+```
+# CODM Multiplayer Dashboard
+
+React + Plotly frontend with Flask backend. Ready to deploy on Render.
+
+## Quick start (local)
+
+### Backend
+```
+
+cd backend
+python -m venv .venv
+source .venv/bin/activate   # on windows use .venv\Scripts\activate
+pip install -r requirements.txt
+python app.py
+
+```
+
+### Frontend
+```
+
+cd frontend
+npm install
+npm run dev
+
+```
+
+The frontend expects the backend API at the URL in VITE_API_BASE (default http://localhost:8080).
+
+## Deploy to Render
+- Create two services: a Web Service for backend and a Static Site for frontend.
+- Use `render.yaml` provided.
+- Set environment variable `VITE_API_BASE` in the Static Site settings to your backend URL.
+```
+
+---
+
+### render.yaml
+
+```
+services:
+  - type: web
+    name: codm-backend
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
+    repo: <YOUR_REPO_URL>
+
+static_sites:
+  - name: codm-frontend
+    env: node
+    plan: free
+    buildCommand: "cd frontend && npm install && npm run build"
+    publishPath: "frontend/dist"
+    repo: <YOUR_REPO_URL>
+```
+
+Replace `<YOUR_REPO_URL>` with your GitHub repo URL when using render's GitHub integration.
+
+---
+
+### backend/app.py
+
+```python
+from flask import Flask, jsonify, send_from_directory, request
+import pandas as pd
+import os
+
+app = Flask(__name__)
+DATA_PATH = os.environ.get('DATA_PATH', 'data/vedas_5match_stats.csv')
+
+def load_data():
+    if not os.path.exists(DATA_PATH):
+        return pd.DataFrame()
+    df = pd.read_csv(DATA_PATH)
+    # Normalize column names if needed
+    df.columns = [c.strip() for c in df.columns]
+    return df
+
+@app.route('/api/matches')
+def matches():
+    df = load_data()
+    return df.to_json(orient='records', force_ascii=False)
+
+@app.route('/api/summary')
+def summary():
+    df = load_data()
+    total_matches = len(df)
+    if total_matches == 0:
+        return jsonify({
+            'total_matches':0
+        })
+    total_kills = int(df['Kills'].sum())
+    total_deaths = int(df['Deaths'].sum())
+    kd_ratio = round(total_kills / total_deaths, 2) if total_deaths>0 else None
+    win_rate = round((df['Result'].str.contains('Win').sum() / total_matches) * 100,2)
+    avg_accuracy = round(df['Accuracy'].astype(float).mean(),2)
+    mvp_rate = round((df['MVP'].astype(str).str.lower().eq('yes').sum() / total_matches) * 100,2)
+    avg_impact = round(df['Impact'].astype(float).mean(),2)
+    return jsonify({
+        'total_matches': total_matches,
+        'total_kills': total_kills,
+        'total_deaths': total_deaths,
+        'kd_ratio': kd_ratio,
+        'win_rate': win_rate,
+        'avg_accuracy': avg_accuracy,
+        'mvp_rate': mvp_rate,
+        'avg_impact': avg_impact
+    })
+
+@app.route('/api/trends')
+def trends():
+    df = load_data()
+    if df.empty:
+        return jsonify({'matches':[], 'kills':[], 'accuracy':[], 'impact':[], 'score':[]})
+    payload = {
+        'matches': df['Match'].tolist(),
+        'kills': df['Kills'].tolist(),
+        'accuracy': df['Accuracy'].tolist(),
+        'impact': df['Impact'].tolist(),
+        'score': df['Score'].tolist()
+    }
+    return jsonify(payload)
+
+@app.route('/api/maps')
+def maps():
+    df = load_data()
+    if df.empty:
+        return jsonify([])
+    grouped = df.groupby('Map').agg({'Kills':'mean','Impact':'mean','KD Ratio':'mean','Match':'count'}).reset_index()
+    grouped = grouped.rename(columns={'Match':'games'})
+    return grouped.to_json(orient='records', force_ascii=False)
+
+# simple CSV upload endpoint (POST) to update data
+@app.route('/api/upload', methods=['POST'])
+def upload():
+    # expects form-data with file field 'file'
+    if 'file' not in request.files:
+        return jsonify({'error':'no file uploaded'}), 400
+    f = request.files['file']
+    save_path = DATA_PATH
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    f.save(save_path)
+    return jsonify({'ok':True, 'path':save_path})
+
+@app.route('/')
+def index():
+    return "Backend running. Use /api/* endpoints"
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+```
+
+---
+
+### backend/requirements.txt
+
+```
+Flask==2.3.2
+pandas==2.2.3
+gunicorn==21.2.0
+```
+
+---
+
+### backend/Procfile
+
+```
+web: gunicorn app:app --bind 0.0.0.0:$PORT
+```
+
+---
+
+### backend/data/vedas_5match_stats.csv
+
+```
+Match,Map,Mode,Result,Score,Kills,Deaths,Assists,KD Ratio,Impact,Accuracy,ADR,FirstKills,LoneWolfWins,MVP
+1,Summit,S&D,Loss 4-5,1165,11,6,0,1.83,163,50.0,130,0,2,Yes
+2,Hackney Yard,S&D,Loss 2-5,248,2,7,1,0.28,65,70.0,109,0,0,No
+3,Terminal,S&D,Loss 2-5,420,4,6,0,0.66,94,14.8,119,1,0,No
+4,Crash,S&D,Win 5-4,936,8,6,0,1.33,133,16.2,99,2,0,No
+5,Khandor Hideout,S&D,Win 5-1,1566,12,2,0,6.00,197,23.8,201,2,2,Yes
+```
+
+---
+
+### frontend/package.json
+
+```json
+{
+  "name": "codm-dashboard-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-plotly.js": "^2.5.1",
+    "plotly.js-basic-dist": "^2.24.1",
+    "axios": "^1.4.0"
+  },
+  "devDependencies": {
+    "vite": "^4.4.0",
+    "@vitejs/plugin-react": "^4.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}
+```
+
+---
+
+### frontend/vite.config.js
+
+```js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: { port: 5173 }
+})
+```
+
+---
+
+### frontend/index.html
+
+```html
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VEDA — Multiplayer Analytics</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+```
+
+---
+
+### frontend/src/main.jsx
+
+```jsx
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App'
+import './styles.css'
+
+createRoot(document.getElementById('root')).render(<App />)
+```
+
+---
+
+### frontend/src/App.jsx
+
+```jsx
+import React from 'react'
+import SummaryCards from './components/SummaryCards'
+import TrendChart from './components/TrendChart'
+import MatchTimeline from './components/MatchTimeline'
+import MapPerformance from './components/MapPerformance'
+
+export default function App(){
+  return (
+    <div className="container">
+      <header className="header">
+        <h1>VEDA — Multiplayer Analytics</h1>
+      </header>
+      <main>
+        <SummaryCards />
+        <div className="grid">
+          <TrendChart />
+          <MapPerformance />
+        </div>
+        <MatchTimeline />
+      </main>
+    </div>
+  )
+}
+```
+
+---
+
+### frontend/src/api.js
+
+```js
+import axios from 'axios'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080'
+export const getSummary = () => axios.get(`${API_BASE}/api/summary`).then(r=>r.data)
+export const getTrends = () => axios.get(`${API_BASE}/api/trends`).then(r=>r.data)
+export const getMatches = () => axios.get(`${API_BASE}/api/matches`).then(r=>r.data)
+export const getMaps = () => axios.get(`${API_BASE}/api/maps`).then(r=>r.data)
+export const uploadCSV = (file) => {
+  const form = new FormData(); form.append('file', file);
+  return axios.post(`${API_BASE}/api/upload`, form, { headers:{ 'Content-Type':'multipart/form-data' }})
+}
+```
+
+---
+
+### frontend/src/styles.css
+
+```css
+body{font-family:Inter, system-ui, Arial, sans-serif; background:#f7fafc; color:#0f172a}
+.container{max-width:1100px;margin:24px auto;padding:16px}
+.header h1{font-size:20px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.pane{background:white;padding:12px;border-radius:8px;box-shadow:0 1px 4px rgba(15,23,42,0.06)}
+table{width:100%;border-collapse:collapse}
+td,th{padding:6px 8px;border-bottom:1px solid #eef2f7;text-align:left}
+```
+
+---
+
+### frontend/src/components/SummaryCards.jsx
+
+```jsx
+import React, {useEffect, useState} from 'react'
+import { getSummary } from '../api'
+
+export default function SummaryCards(){
+  const [s, setS] = useState(null)
+  useEffect(()=>{ getSummary().then(setS) }, [])
+  if(!s) return <div className="pane">Loading summary...</div>
+  return (
+    <div className="pane" style={{display:'flex',gap:'12px'}}>
+      <div style={{flex:1}}>
+        <div>Total Matches</div>
+        <strong style={{fontSize:20}}>{s.total_matches}</strong>
+      </div>
+      <div style={{flex:1}}>
+        <div>K/D Ratio</div>
+        <strong style={{fontSize:20}}>{s.kd_ratio}</strong>
+      </div>
+      <div style={{flex:1}}>
+        <div>Win Rate</div>
+        <strong style={{fontSize:20}}>{s.win_rate}%</strong>
+      </div>
+      <div style={{flex:1}}>
+        <div>Avg Accuracy</div>
+        <strong style={{fontSize:20}}>{s.avg_accuracy}%</strong>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### frontend/src/components/TrendChart.jsx
+
+```jsx
+import React, {useEffect, useState} from 'react'
+import Plot from 'react-plotly.js'
+import { getTrends } from '../api'
+
+export default function TrendChart(){
+  const [data, setData] = useState(null)
+  useEffect(()=>{ getTrends().then(setData) }, [])
+  if(!data) return <div className="pane">Loading chart...</div>
+  return (
+    <div className="pane">
+      <h3>Kills & Accuracy Trend</h3>
+      <Plot
+        data={[
+          { x: data.matches, y: data.kills, type: 'scatter', mode: 'lines+markers', name: 'Kills' },
+          { x: data.matches, y: data.accuracy, type: 'scatter', mode: 'lines+markers', name: 'Accuracy', yaxis: 'y2' }
+        ]}
+        layout={{ margin:{t:30}, yaxis:{title:'Kills'}, yaxis2:{title:'Accuracy', overlaying:'y', side:'right'} }}
+        style={{width:'100%', height:380}}
+      />
+    </div>
+  )
+}
+```
+
+---
+
+### frontend/src/components/MapPerformance.jsx
+
+```jsx
+import React,{useEffect,useState} from 'react'
+import Plot from 'react-plotly.js'
+import { getMaps } from '../api'
+
+export default function MapPerformance(){
+  const [maps, setMaps] = useState(null)
+  useEffect(()=> getMaps().then(setMaps), [])
+  if(!maps) return <div className="pane">Loading maps...</div>
+  const names = maps.map(m=>m.Map)
+  const impacts = maps.map(m=>parseFloat(m.Impact).toFixed(1))
+  return (
+    <div className="pane">
+      <h3>Map Performance (Impact)</h3>
+      <Plot data={[{ x:names, y:impacts, type:'bar' }]} layout={{height:380, margin:{t:30}}} style={{width:'100%'}}/>
+    </div>
+  )
+}
+```
+
+---
+
+### frontend/src/components/MatchTimeline.jsx
+
+```jsx
+import React,{useEffect,useState} from 'react'
+import { getMatches, uploadCSV } from '../api'
+
+export default function MatchTimeline(){
+  const [matches, setMatches] = useState([])
+  const [file, setFile] = useState(null)
+  useEffect(()=> getMatches().then(setMatches), [])
+
+  const onUpload = async ()=>{
+    if(!file) return alert('select CSV file')
+    const res = await uploadCSV(file)
+    alert('Upload result: '+JSON.stringify(res.data || res))
+    // refresh
+    getMatches().then(setMatches)
+  }
+
+  return (
+    <div className="pane" style={{marginTop:16}}>
+      <h3>Match Timeline</h3>
+      <div style={{marginBottom:8}}>
+        <input type="file" accept=".csv" onChange={e=>setFile(e.target.files[0])} />
+        <button onClick={onUpload} style={{marginLeft:8}}>Upload CSV</button>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Map</th><th>Result</th><th>K/D</th><th>Impact</th></tr></thead>
+        <tbody>
+          {matches.map(m=> (
+            <tr key={m.Match}><td>{m.Match}</td><td>{m.Map}</td><td>{m.Result}</td><td>{m['KD Ratio']}</td><td>{m.Impact}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+```
+
+---
+
+## Done — what I created for you
+
+* Full file listing above with ready-to-paste code.
+* CSV upload endpoint in backend so you can replace the dataset via UI.
+* Plotly charts in frontend for interactive visuals.
+* Render deployment manifest (render.yaml).
+
+---
+
+## Next actions (pick one)
+
+1. **I can package these files into a downloadable ZIP for you.**
+2. **I can push the files to a GitHub repo if you grant a repo URL and give permission (manual paste recommended).**
+3. **I can help you set up the Render deployment step-by-step.**
+
+Tell me which next action you'd like.
 
