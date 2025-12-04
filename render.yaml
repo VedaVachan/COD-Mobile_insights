@@ -1,25 +1,16 @@
-# Render Blueprint: backend (Flask) + frontend (static site)
-# Do NOT include `repo:` fields here — connect repo in the Render UI.
-
 services:
   - type: web
     name: codm-backend
     env: python
     plan: free
-    # Backend build: install requirements
     buildCommand: "pip install -r requirements.txt"
-    # Start with gunicorn using app:app
     startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
-    # Optional: set branch to deploy (default is repo's default branch)
-    # branch: main
 
-static_sites:
-  - name: codm-frontend
+  - type: static_site
+    name: codm-frontend
     env: node
     plan: free
-    # Build command runs from repo root and builds the frontend
     buildCommand: "cd frontend && npm install && npm run build"
     publishPath: "frontend/dist"
-    # Optional: branch: main
 
 
