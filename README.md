@@ -1,4 +1,4 @@
-# Multiplayer Dashboard (HTML + Plotly + Flask)
+# CODM Multiplayer Dashboard
 
 ## Run locally
 
