@@ -1,0 +1,7 @@
+[
+  {"id":"bp50","name":"BP50 - Ion Eruption","rarity":"mythic","img":"assets/weapons/bp50.jpg","desc":"Mythic close-range powerhouse."},
+  {"id":"ak117","name":"AK117 - Lava Remix","rarity":"legend","img":"assets/weapons/ak117.jpg","desc":"Legend assault rifle."},
+  {"id":"qq9","name":"QQ9 - Dual Kinetics","rarity":"legend","img":"assets/weapons/qq9.jpg","desc":"High DPS SMG."},
+  {"id":"lk24","name":"LK24 - Deadly Petals","rarity":"legend","img":"assets/weapons/lk24.jpg","desc":"Reliable AR."},
+  {"id":"locus","name":"Locus - Red Comet","rarity":"legend","img":"assets/weapons/locus.jpg","desc":"High-damage sniper."}
+]
