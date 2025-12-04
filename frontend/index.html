@@ -7,7 +7,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Plotly CDN -->
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
-  <link rel="stylesheet" href="styles.css" />
+
+  <!-- NOTE: leading slash (/) -> load from site root (served by Flask) -->
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <div class="container">
@@ -44,7 +46,7 @@
     <footer class="muted">Data: sample generated on backend. Replace API to use real CSV/DB.</footer>
   </div>
 
-  <script src="main.js"></script>
+  <!-- NOTE: leading slash (/) -> load from site root (served by Flask) -->
+  <script src="/main.js"></script>
 </body>
 </html>
-
