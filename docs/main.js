@@ -1,67 +1,54 @@
-// main.js — full app wiring (profile, weapons, dashboard)
+// main.js
 (function(){
-  // helpers
   const $ = id => document.getElementById(id);
-  function toNum(v, f=0){ if (v==null||v==="") return f; const n=Number(String(v).replace(/[^0-9.\-]/g,"")); return Number.isFinite(n)?n:f;}
-  function toBool(v){ if(typeof v==="boolean") return v; if(!v) return false; const s=String(v).trim().toLowerCase(); return ["1","true","yes","y"].includes(s); }
-  function fmtDate(iso){ const d=new Date(iso); return isNaN(d)?iso:d.toLocaleDateString(); }
-
-  // sample data locations
   const MATCHES_JSON = "data/matches.json";
   const WEAPONS_JSON = "data/weapons.json";
 
-  // --------- profile buttons behavior ----------
+  function toNum(v,d=0){ const n=Number(String(v||"").replace(/[^0-9.\-]/g,"")); return Number.isFinite(n)?n:d; }
+  function toBool(v){ if(typeof v==="boolean") return v; if(!v) return false; const s=String(v).trim().toLowerCase(); return ["1","true","yes","y"].includes(s); }
+  function fmtDate(iso){ const d=new Date(iso); return isNaN(d)?iso:d.toLocaleDateString(); }
+
+  // profile button wiring
   function initProfileButtons(){
-    const btnOverview = $("btnOverview"), btnMatches = $("btnMatches"), btnPlans = $("btnPlans");
-    if(btnOverview) btnOverview.addEventListener("click", ()=> { window.scrollTo({top:0,behavior:"smooth"}) });
-    if(btnMatches) btnMatches.addEventListener("click", ()=> { $("timeline") && $("timeline").scrollIntoView({behavior:"smooth",block:"center"}) });
-    if(btnPlans) btnPlans.addEventListener("click", async ()=>{
-      // render dashboard (prefer currently loaded CSV -> window.currentMatches)
-      let matches = window.currentMatches;
-      if(!matches){
-        try{ const r = await fetch(MATCHES_JSON); if(r.ok) matches = await r.json(); }catch(e){ matches = []; }
+    $("btnOverview")?.addEventListener("click", ()=> window.scrollTo({top:0,behavior:"smooth"}));
+    $("btnMatches")?.addEventListener("click", ()=> $("timeline")?.scrollIntoView({behavior:"smooth",block:"center"}));
+    $("btnPlans")?.addEventListener("click", async ()=>{
+      if(!window.currentMatches){
+        try{ window.currentMatches = await fetchMatches(); } catch(e){ window.currentMatches = []; }
       }
-      renderAndDrawAll(matches || []);
+      renderAndDrawAll(window.currentMatches || []);
       $("dashboardSection").scrollIntoView({behavior:"smooth", block:"start"});
-      // optionally collapse hero visually
-      const hero = document.getElementById("hero"); if(hero) hero.classList.add("collapsed");
+      $("hero")?.classList.add("collapsed");
     });
   }
 
-  // --------- CSV upload wiring ----------
+  // CSV upload wiring
   function initCsvUpload(){
     const uploadBtn = $("uploadBtn"), csvFile = $("csvFile");
     if(!uploadBtn || !csvFile || typeof Papa === "undefined") return;
     uploadBtn.addEventListener("click", ()=> csvFile.click());
-    csvFile.addEventListener("change", (ev)=>{
-      const file = ev.target.files && ev.target.files[0]; if(!file) return;
-      Papa.parse(file, { header:true, skipEmptyLines:true,
-        complete:function(results){
-          const baseDate = new Date();
-          const parsed = results.data.map((r,i)=> mapRowToMatch(r,i,baseDate));
-          window.currentMatches = parsed;
-          renderAndDrawAll(parsed);
-        },
-        error:function(err){ alert("CSV parse failed: "+err.message) }
-      });
+    csvFile.addEventListener("change", (ev) => {
+      const f = ev.target.files && ev.target.files[0]; if(!f) return;
+      Papa.parse(f, { header:true, skipEmptyLines:true, complete: (res)=>{
+        const parsed = res.data.map((r,i)=> mapRowToMatch(r,i,new Date()));
+        window.currentMatches = parsed;
+        renderAndDrawAll(parsed);
+      }, error: (err) => alert("CSV parse failed: "+err.message) });
     });
   }
 
-  // --------- map raw csv row to match object ----------
+  // map CSV row -> match object
   function mapRowToMatch(r,i,baseDate){
-    const id = r.match||r.Match||r.id||r.ID|| (i+1);
-    const dateRaw = r.date||r.Date||null;
+    const id = r.match || r.Match || r.id || (i+1);
+    const dateRaw = r.date || r.Date || null;
     let iso;
-    if(dateRaw){ const d=new Date(dateRaw); iso = isNaN(d)? new Date(baseDate.getTime()-i*24*3600*1000).toISOString() : d.toISOString(); }
+    if(dateRaw){ const d = new Date(dateRaw); iso = isNaN(d)? new Date(baseDate.getTime()-i*24*3600*1000).toISOString() : d.toISOString(); }
     else iso = new Date(baseDate.getTime()-i*24*3600*1000).toISOString();
-    const map = r.map||r.Map||"Unknown"; const mode = r.mode||r.Mode||"Multiplayer";
-    const result = r.result||r.Result||"";
+    const map = r.map || r.Map || 'Unknown';
+    const mode = r.mode || r.Mode || 'Multiplayer';
+    const result = r.result || r.Result || '';
     return {
-      id: id,
-      date: iso,
-      map: map,
-      mode: mode,
-      result: result,
+      id, date: iso, map, mode, result,
       score: toNum(r.score||r.Score||0),
       kills: toNum(r.kills||r.Kills||0),
       deaths: toNum(r.deaths||r.Deaths||0),
@@ -69,16 +56,16 @@
       impact: toNum(r.impact||r.Impact||0),
       accuracy: toNum(r.accuracy||r.Accuracy||0),
       duration_min: toNum(r.duration_min||r.Duration||15),
-      mvp: toBool(r.mvp||r.MVP||""),
+      mvp: toBool(r.mvp||r.MVP||''),
       win: /win/i.test(String(result))
     };
   }
 
-  // --------- visualizations (same as earlier) ----------
+  // dashboard plotting helpers
   function renderSummary(matches){
     const container = $("summary"); if(!container) return;
-    container.innerHTML="";
-    const total = matches.length||0;
+    container.innerHTML = "";
+    const total = matches.length || 0;
     const avg = key => (matches.reduce((s,m)=> s + (toNum(m[key]||0)),0) / Math.max(1,total))||0;
     const wins = matches.filter(m=>m.win).length;
     const mvps = matches.filter(m=>m.mvp).length;
@@ -91,7 +78,9 @@
       {title:"MVP Rate", value: ((mvps/Math.max(1,total))*100).toFixed(1)+"%"}
     ];
     cards.forEach(c=>{
-      const el=document.createElement("div"); el.className="card summary-item"; el.innerHTML=`<div class="title">${c.title}</div><div class="value">${c.value}</div>`; container.appendChild(el);
+      const el = document.createElement("div"); el.className = "card summary-item";
+      el.innerHTML = `<div class="title">${c.title}</div><div class="value">${c.value}</div>`;
+      container.appendChild(el);
     });
   }
 
@@ -106,13 +95,12 @@
     reversed.forEach(m=>{
       const item = document.createElement("div"); item.className="timeline-item";
       item.innerHTML = `<div style="display:flex;align-items:center;gap:10px"><div class="badge-win ${m.win?"win":"lose"}"></div><div><div style="font-weight:600">#${m.id} — ${m.mode} on ${m.map}</div><div class="muted">${fmtDate(m.date)} • ${m.duration_min} min</div></div></div><div style="text-align:right"><div style="font-weight:600">${m.kills} / ${m.deaths} / ${m.assists}</div><div class="muted">${m.accuracy}% • ${m.score} pts ${m.mvp?' • MVP':''}</div></div>`;
-      item.addEventListener("click", ()=> openMatchModal(m));
+      item.addEventListener("click", ()=> {
+        alert(`Match #${m.id}\nMap: ${m.map}\nMode: ${m.mode}\nScore: ${m.score}\nKills: ${m.kills} • Deaths: ${m.deaths} • Assists: ${m.assists}`);
+      });
       container.appendChild(item);
     });
   }
-
-  // simple alert-based details (we'll add modal for matches later if you want)
-  function openMatchModal(m){ alert(`Match #${m.id}\nMap: ${m.map}\nMode: ${m.mode}\nScore: ${m.score}\nKills: ${m.kills} • Deaths: ${m.deaths} • Assists: ${m.assists}`); }
 
   function renderAndDrawAll(matches){
     renderSummary(matches);
@@ -122,47 +110,18 @@
     drawKDDistribution(matches);
     drawMapPerformance(matches);
     renderTimeline(matches);
-    // ensure plotly resizes (mobile)
-    setTimeout(resizeAllPlots, 200);
+    // give Plotly a bit of time then resize (mobile)
+    setTimeout(()=>{ try{ ["killsTrend","accuracyTrend","scoreImpact","kdDist","mapPerf"].forEach(id=>{ const el=$(id); if(el && window.Plotly && Plotly.Plots && Plotly.Plots.resize) Plotly.Plots.resize(el); }); }catch(e){} }, 250);
   }
 
-  // resize helper for plotly
-  function resizeAllPlots(){ try{ ["killsTrend","accuracyTrend","scoreImpact","kdDist","mapPerf"].forEach(id=>{ const el=$(id); if(el && window.Plotly && Plotly.Plots && Plotly.Plots.resize) Plotly.Plots.resize(el); }); }catch(e){console.warn(e)} }
-  window.addEventListener("resize", ()=> { clearTimeout(window._resizeTO); window._resizeTO = setTimeout(resizeAllPlots, 180); });
-  window.addEventListener("orientationchange", ()=> setTimeout(resizeAllPlots, 250));
+  // fetch static
+  async function fetchMatches(){ const r = await fetch(MATCHES_JSON); if(!r.ok) throw new Error("no matches"); return r.json(); }
 
-  // fetch static matches
-  async function fetchMatches(){
-    const r = await fetch(MATCHES_JSON);
-    if(!r.ok) throw new Error("no matches json");
-    return r.json();
-  }
-
-  // csv/upload/export wiring
-  function initCsvAndExport(){
-    const up = $("uploadBtn"), cf = $("csvFile");
-    if(up && cf && window.Papa){ up.addEventListener("click", ()=> cf.click()); cf.addEventListener("change", (ev)=>{ const f = ev.target.files&&ev.target.files[0]; if(!f) return; Papa.parse(f,{header:true,skipEmptyLines:true,complete:function(res){ const parsed = res.data.map((r,i)=> mapRowToMatch(r,i,new Date())); window.currentMatches = parsed; renderAndDrawAll(parsed); }, error:function(e){ alert("CSV parse error: "+e.message)} });}); }
-    // refresh button
-    const ref = $("refreshBtn"); if(ref) ref.addEventListener("click", async ()=> { try{ const matches = await fetchMatches(); window.currentMatches = matches; renderAndDrawAll(matches); }catch(e){ alert("load failed: "+e.message); } });
-    // export
-    const btnExport = document.querySelector(".profile-right .btn-small") || null;
-    if(btnExport){
-      btnExport.addEventListener("click", ()=> {
-        const matches = window.currentMatches || [];
-        if(!matches.length) return alert("No matches loaded");
-        const headers = Object.keys(matches[0]); const rows = matches.map(m=> headers.map(h=> { const v = m[h]; return (typeof v==="string" && v.includes(",")) ? `"${v.replace(/"/g,'""')}"` : String(v ?? ""); }).join(","));
-        const csv = [headers.join(",")].concat(rows).join("\n");
-        const blob = new Blob([csv],{type:"text/csv"}); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href=url; a.download="matches_export.csv"; a.click(); URL.revokeObjectURL(url);
-      });
-    }
-  }
-
-  // --------- weapons gallery ----------
+  // weapons gallery with video support
   async function loadWeapons(){
     try{
       const res = await fetch(WEAPONS_JSON);
-      const list = res.ok ? await res.json() : defaultWeapons();
-      // split by rarity to the two grids and others
+      const list = res.ok ? await res.json() : [];
       const mythic = list.filter(w=>w.rarity==="mythic");
       const legend = list.filter(w=>w.rarity==="legend");
       const other = list.filter(w=>!["mythic","legend"].includes(w.rarity));
@@ -170,42 +129,93 @@
       renderGrid("legendGrid", legend);
       renderBigGrid("otherGrid", other);
       window._weapons = list;
-    }catch(e){ console.warn("weapons load",e); const d = defaultWeapons(); renderGrid("mythicGrid",d); renderGrid("legendGrid",d); renderBigGrid("otherGrid",d); window._weapons=d; }
+    }catch(e){
+      console.warn("weapons load failed", e);
+    }
   }
-  function defaultWeapons(){ return [
-      {id:"bp50",name:"BP50 - Ion Eruption",rarity:"mythic",img:"assets/weapons/bp50.jpg",desc:"Mythic short-range beast"},
-      {id:"ak117",name:"AK117 - Lava Remix",rarity:"legend",img:"assets/weapons/ak117.jpg",desc:"Legend AR"},
-      {id:"qq9",name:"QQ9 - Dual Kinetics",rarity:"legend",img:"assets/weapons/qq9.jpg",desc:"SMG"}
-  ]; }
-  function renderGrid(elId, arr){
-    const el = $(elId); if(!el) return; el.innerHTML="";
-    arr.forEach(w=>{
-      const card = document.createElement("div"); card.className="weapon-card";
-      card.innerHTML = `<div class="weapon-thumb"><img src="${w.img}" alt="${w.name}" /></div><div class="weapon-name">${w.name}</div><div class="rarity-badge ${w.rarity==='mythic'?'rarity-mythic':w.rarity==='legend'?'rarity-legend':'rarity-epic'}">${(w.rarity||"").toUpperCase()}</div>`;
-      const img = card.querySelector("img");
-      img.addEventListener("load", ()=> card.classList.add("img-loaded"));
-      img.addEventListener("error", ()=> { img.src="assets/weapons/placeholder.png"; card.classList.add("img-loaded"); });
-      card.addEventListener("click", ()=> openWeaponModal(w));
-      el.appendChild(card);
-    });
-  }
-  function renderBigGrid(elId, arr){
-    const el = $(elId); if(!el) return; el.innerHTML="";
-    arr.forEach(w=>{
-      const img = document.createElement("img"); img.src = w.img; img.alt = w.name; img.onerror = ()=> img.src="assets/weapons/placeholder.png"; img.addEventListener("click", ()=> openWeaponModal(w)); el.appendChild(img);
-    });
-  }
-  // modal open/close
-  function openWeaponModal(w){
-    const m = $("weaponModal"); if(!m) return; $("weaponModalImg").src = w.img || "assets/weapons/placeholder.png"; $("weaponModalName").textContent = w.name; const rb = $("weaponModalRarity"); rb.className = "rarity-badge "+(w.rarity==="mythic"?"rarity-mythic":w.rarity==="legend"?"rarity-legend":"rarity-epic"); rb.textContent = (w.rarity||"").toUpperCase(); $("weaponModalDesc").textContent = w.desc||""; m.setAttribute("aria-hidden","false");
-  }
-  document.addEventListener("click", (ev)=> { if(ev.target && ev.target.id==="weaponModalClose") $("weaponModal").setAttribute("aria-hidden","true"); if(ev.target && ev.target.id==="weaponModal") $("weaponModal").setAttribute("aria-hidden","true"); });
 
-  // on load
+  function renderGrid(elId, arr){
+    const container = $(elId); if(!container) return;
+    container.innerHTML = "";
+    const ioOptions = { root: null, rootMargin: "200px", threshold: 0.25 };
+    const observer = new IntersectionObserver((entries)=>{
+      entries.forEach(entry=>{
+        const video = entry.target.querySelector("video");
+        if(!video) return;
+        if(entry.isIntersecting){
+          video.play().catch(()=>{});
+        } else {
+          try{ video.pause(); video.currentTime = 0; }catch(e){}
+        }
+      });
+    }, ioOptions);
+
+    arr.forEach(w=>{
+      const card = document.createElement("div"); card.className = "weapon-card";
+      const thumb = document.createElement("div"); thumb.className = "weapon-thumb";
+      const staticImg = document.createElement("img"); staticImg.src = w.img || "assets/weapons/placeholder.png"; staticImg.alt = w.name || ""; staticImg.loading = "lazy";
+      thumb.appendChild(staticImg);
+
+      if(w.video){
+        const video = document.createElement("video");
+        video.muted = true; video.loop = true; video.playsInline = true; video.preload = "metadata";
+        if(w.poster) video.poster = w.poster;
+        const src = document.createElement("source");
+        src.src = w.video;
+        if(/\.webm$/i.test(w.video)) src.type = "video/webm"; else if(/\.mp4$/i.test(w.video)) src.type = "video/mp4";
+        video.appendChild(src);
+        video.controls = false;
+        video.style.width = "100%";
+        video.addEventListener("loadedmetadata", ()=> card.classList.add("video-ready"));
+        video.addEventListener("error", ()=> { video.remove(); card.classList.remove("video-ready"); });
+        thumb.appendChild(video);
+        // attempt play; will actually play when observed
+        video.play().catch(()=>{});
+      }
+
+      const nameDiv = document.createElement("div"); nameDiv.className = "weapon-name"; nameDiv.textContent = w.name || "";
+      const rarity = document.createElement("div"); rarity.className = "rarity-badge "+(w.rarity==="mythic"?"rarity-mythic":w.rarity==="legend"?"rarity-legend":"rarity-epic"); rarity.textContent = (w.rarity||"").toUpperCase();
+
+      card.appendChild(thumb); card.appendChild(nameDiv); card.appendChild(rarity);
+      card.addEventListener("click", ()=> openWeaponModal(w));
+      container.appendChild(card);
+
+      if(w.video) observer.observe(card);
+    });
+  }
+
+  function renderBigGrid(elId, arr){
+    const container = $(elId); if(!container) return;
+    container.innerHTML = "";
+    arr.forEach(w=>{
+      const img = document.createElement("img"); img.src = w.img || "assets/weapons/placeholder.png"; img.alt = w.name || ""; img.addEventListener("click", ()=> openWeaponModal(w));
+      container.appendChild(img);
+    });
+  }
+
+  function openWeaponModal(w){
+    const m = $("weaponModal"); if(!m) return;
+    $("weaponModalImg").src = w.img || "assets/weapons/placeholder.png";
+    $("weaponModalName").textContent = w.name || "";
+    const rb = $("weaponModalRarity"); rb.className = "rarity-badge "+(w.rarity==="mythic"?"rarity-mythic":w.rarity==="legend"?"rarity-legend":"rarity-epic"); rb.textContent = (w.rarity||"").toUpperCase();
+    $("weaponModalDesc").textContent = w.desc || "";
+    m.setAttribute("aria-hidden","false");
+  }
+
+  document.addEventListener("click", (ev)=> {
+    if(ev.target && (ev.target.id === "weaponModalClose" || ev.target.id === "weaponModal")) $("weaponModal").setAttribute("aria-hidden","true");
+  });
+
+  // init
   document.addEventListener("DOMContentLoaded", async ()=>{
-    initProfileButtons(); initCsvAndExport(); initCsvUpload(); initCsvAndExport(); await loadWeapons();
-    // try to load static matches
-    try{ const matches = await fetch(MATCHES_JSON); window.currentMatches = matches; renderAndDrawAll(matches); } catch(e){ console.warn("matches load failed",e); }
+    initProfileButtons();
+    initCsvUpload();
+    try{ window.currentMatches = await fetchMatches(); renderAndDrawAll(window.currentMatches); } catch(e){ console.warn("matches load failed", e); }
+    await loadWeapons();
+    // refresh button wiring
+    $("refreshBtn")?.addEventListener("click", async ()=> {
+      try{ window.currentMatches = await fetchMatches(); renderAndDrawAll(window.currentMatches); } catch(e){ alert("Failed to reload matches"); }
+    });
   });
 
 })();
