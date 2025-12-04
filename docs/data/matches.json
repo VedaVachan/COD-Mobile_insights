@@ -1,0 +1,7 @@
+[
+  {"id":1,"date":"2025-11-30T12:00:00Z","map":"Altar","mode":"BR","kills":8,"deaths":3,"assists":1,"score":1450,"accuracy":42.1,"impact":78,"duration_min":18,"mvp":true,"win":true},
+  {"id":2,"date":"2025-11-29T12:00:00Z","map":"Shipyard","mode":"Multiplayer","kills":4,"deaths":6,"assists":2,"score":800,"accuracy":28.9,"impact":45,"duration_min":15,"mvp":false,"win":false},
+  {"id":3,"date":"2025-11-28T12:00:00Z","map":"Bunker","mode":"Duel","kills":10,"deaths":2,"assists":0,"score":2000,"accuracy":55.4,"impact":98,"duration_min":20,"mvp":true,"win":true},
+  {"id":4,"date":"2025-11-27T12:00:00Z","map":"Factory","mode":"BR","kills":3,"deaths":4,"assists":0,"score":600,"accuracy":25.5,"impact":20,"duration_min":12,"mvp":false,"win":false},
+  {"id":5,"date":"2025-11-26T12:00:00Z","map":"Altar","mode":"Multiplayer","kills":6,"deaths":5,"assists":1,"score":1100,"accuracy":34.0,"impact":55,"duration_min":16,"mvp":false,"win":true}
+]
