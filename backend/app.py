@@ -1,12 +1,16 @@
 # backend/app.py
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from datetime import datetime, timedelta
 import random
 import os
+import pathlib
 
-app = Flask(__name__, static_folder="../frontend", static_url_path="/")
+# compute absolute path to the frontend folder (relative to this file)
+BASE_DIR = pathlib.Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
-# Generate sample matches (30 matches)
+app = Flask(__name__, static_folder=str(FRONTEND_DIR), static_url_path="/")
+
 def generate_sample_matches(n=30):
     maps = ['Altar', 'Shipyard', 'Bunker', 'Factory']
     modes = ['BR', 'Multiplayer', 'Duel']
@@ -37,17 +41,27 @@ def generate_sample_matches(n=30):
         matches.append(match)
     return matches
 
-# Serve index.html and static assets
+# Log requests for easier debugging
+@app.before_request
+def log_request():
+    print(f"[Request] {request.method} {request.path}")
+
+# Serve index.html at root
 @app.route("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
 
-@app.route("/<path:path>")
-def static_proxy(path):
-    # serve static files (css, js)
-    return send_from_directory(app.static_folder, path)
+# Serve any other static file from frontend folder (css, js, images)
+@app.route("/<path:filename>")
+def static_files(filename):
+    # safe-guard: ensure file exists
+    target = pathlib.Path(app.static_folder) / filename
+    if target.exists():
+        return send_from_directory(app.static_folder, filename)
+    # fallback: return index (for SPA) or 404
+    return ("Not Found", 404)
 
-# API endpoint for matches
+# API endpoint
 @app.route("/api/matches")
 def api_matches():
     matches = generate_sample_matches(30)
@@ -55,4 +69,5 @@ def api_matches():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    # debug=True automatically restarts on change; keep it for dev
     app.run(host="0.0.0.0", port=port, debug=True)
