@@ -1,4 +1,6 @@
+// docs/main.js
 async function fetchMatches() {
+  // default: static JSON in docs/data/matches.json (works on GitHub Pages)
   const res = await fetch("data/matches.json");
   if (!res.ok) throw new Error("Failed to fetch matches.json: " + res.status);
   return res.json();
@@ -111,21 +113,58 @@ function renderTimeline(matches) {
   });
 }
 
-async function refreshAll() {
-  try {
-    const matches = await fetchMatches();
-    renderSummary(matches);
-    drawKillsTrend(matches);
-    drawAccuracyTrend(matches);
-    drawScoreImpact(matches);
-    drawKDDistribution(matches);
-    drawMapPerformance(matches);
-    renderTimeline(matches);
-  } catch (err) {
-    console.error("Failed to load matches:", err);
-    alert("Failed to load matches — check browser console.");
-  }
+async function refreshAllFromStatic() {
+  const matches = await fetchMatches();
+  renderAndDrawAll(matches);
 }
 
-document.getElementById("refreshBtn").addEventListener("click", refreshAll);
-window.addEventListener("load", refreshAll);
+function renderAndDrawAll(matches) {
+  renderSummary(matches);
+  drawKillsTrend(matches);
+  drawAccuracyTrend(matches);
+  drawScoreImpact(matches);
+  drawKDDistribution(matches);
+  drawMapPerformance(matches);
+  renderTimeline(matches);
+}
+
+// CSV upload support (PapaParse)
+document.getElementById('uploadBtn').addEventListener('click', () => {
+  document.getElementById('csvFile').click();
+});
+
+document.getElementById('csvFile').addEventListener('change', (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: function(results) {
+      const parsed = results.data.map((r, i) => ({
+        id: r.id ? Number(r.id) : i+1,
+        date: r.date || r.Date || new Date().toISOString(),
+        map: r.map || r.Map || 'Unknown',
+        mode: r.mode || r.Mode || 'Multiplayer',
+        kills: Number(r.kills || r.Kills || 0),
+        deaths: Number(r.deaths || r.Deaths || 0),
+        assists: Number(r.assists || r.Assists || 0),
+        score: Number(r.score || r.Score || 0),
+        accuracy: Number(r.accuracy || r.Accuracy || 0),
+        impact: Number(r.impact || r.Impact || 0),
+        duration_min: Number(r.duration_min || r.Duration || 0),
+        mvp: (r.mvp || r.MVP || '').toString().toLowerCase() === 'true' || (r.mvp || r.MVP || '') === '1',
+        win: (r.win || r.Win || '').toString().toLowerCase() === 'true' || (r.win || r.Win || '') === '1',
+      }));
+      renderAndDrawAll(parsed);
+    },
+    error: function(err) {
+      alert('Failed to parse CSV: ' + err.message);
+    }
+  });
+});
+
+// Refresh button triggers reload from static JSON
+document.getElementById("refreshBtn").addEventListener("click", refreshAllFromStatic);
+
+// Load the static JSON at page load
+window.addEventListener("load", refreshAllFromStatic);
