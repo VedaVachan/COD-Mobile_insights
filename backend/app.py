@@ -1,94 +1,58 @@
-from flask import Flask, jsonify, send_from_directory, request
-from flask_cors import CORS
-import pandas as pd
+# backend/app.py
+from flask import Flask, jsonify, send_from_directory
+from datetime import datetime, timedelta
+import random
 import os
 
-app = Flask(__name__)
-CORS(app)  # 🔥 VERY IMPORTANT — allows frontend access
+app = Flask(__name__, static_folder="../frontend", static_url_path="/")
 
-DATA_PATH = os.environ.get('DATA_PATH', 'data/vedas_5match_stats.csv')
+# Generate sample matches (30 matches)
+def generate_sample_matches(n=30):
+    maps = ['Altar', 'Shipyard', 'Bunker', 'Factory']
+    modes = ['BR', 'Multiplayer', 'Duel']
+    matches = []
+    for i in range(n):
+        d = datetime.utcnow() - timedelta(days=(n - 1 - i))
+        kills = random.randint(0, 18)
+        deaths = random.randint(0, 12)
+        assists = random.randint(0, 6)
+        accuracy = round(random.uniform(20, 70), 1)
+        score = random.randint(200, 2500)
+        impact = random.randint(0, 150)
+        match = {
+            "id": i + 1,
+            "date": d.isoformat() + "Z",
+            "map": maps[i % len(maps)],
+            "mode": modes[i % len(modes)],
+            "kills": kills,
+            "deaths": deaths,
+            "assists": assists,
+            "score": score,
+            "accuracy": accuracy,
+            "impact": impact,
+            "duration_min": random.randint(5, 30),
+            "mvp": random.random() > 0.8,
+            "win": random.random() > 0.6
+        }
+        matches.append(match)
+    return matches
 
-def load_data():
-    if not os.path.exists(DATA_PATH):
-        return pd.DataFrame()
-    df = pd.read_csv(DATA_PATH)
-    df.columns = [c.strip() for c in df.columns]
-    return df
-
-@app.route('/api/matches')
-def matches():
-    df = load_data()
-    return df.to_json(orient='records', force_ascii=False)
-
-@app.route('/api/summary')
-def summary():
-    df = load_data()
-    total_matches = len(df)
-    if total_matches == 0:
-        return jsonify({'total_matches': 0})
-    
-    total_kills = int(df['Kills'].sum())
-    total_deaths = int(df['Deaths'].sum())
-    kd_ratio = round(total_kills / total_deaths, 2) if total_deaths > 0 else None
-    win_rate = round((df['Result'].str.contains('Win').sum() / total_matches) * 100, 2)
-    avg_accuracy = round(df['Accuracy'].astype(float).mean(), 2)
-    mvp_rate = round((df['MVP'].astype(str).str.lower().eq('yes').sum() / total_matches) * 100, 2)
-    avg_impact = round(df['Impact'].astype(float).mean(), 2)
-
-    return jsonify({
-        'total_matches': total_matches,
-        'total_kills': total_kills,
-        'total_deaths': total_deaths,
-        'kd_ratio': kd_ratio,
-        'win_rate': win_rate,
-        'avg_accuracy': avg_accuracy,
-        'mvp_rate': mvp_rate,
-        'avg_impact': avg_impact
-    })
-
-@app.route('/api/trends')
-def trends():
-    df = load_data()
-    if df.empty:
-        return jsonify({'matches': [], 'kills': [], 'accuracy': [], 'impact': [], 'score': []})
-    
-    payload = {
-        'matches': df['Match'].tolist(),
-        'kills': df['Kills'].tolist(),
-        'accuracy': df['Accuracy'].tolist(),
-        'impact': df['Impact'].tolist(),
-        'score': df['Score'].tolist()
-    }
-    return jsonify(payload)
-
-@app.route('/api/maps')
-def maps():
-    df = load_data()
-    if df.empty:
-        return jsonify([])
-    
-    grouped = df.groupby('Map').agg({
-        'Kills': 'mean',
-        'Impact': 'mean',
-        'KD Ratio': 'mean',
-        'Match': 'count'
-    }).reset_index()
-
-    grouped = grouped.rename(columns={'Match': 'games'})
-    return grouped.to_json(orient='records', force_ascii=False)
-
-@app.route('/api/upload', methods=['POST'])
-def upload():
-    if 'file' not in request.files:
-        return jsonify({'error': 'no file uploaded'}), 400
-    f = request.files['file']
-    os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
-    f.save(DATA_PATH)
-    return jsonify({'ok': True, 'path': DATA_PATH})
-
-@app.route('/')
+# Serve index.html and static assets
+@app.route("/")
 def index():
-    return "Backend running. Use /api/* endpoints"
+    return send_from_directory(app.static_folder, "index.html")
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+@app.route("/<path:path>")
+def static_proxy(path):
+    # serve static files (css, js)
+    return send_from_directory(app.static_folder, path)
+
+# API endpoint for matches
+@app.route("/api/matches")
+def api_matches():
+    matches = generate_sample_matches(30)
+    return jsonify(matches)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
