@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Multiplayer Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Plotly CDN -->
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+
+  <!-- Relative path (no leading slash) for GitHub Pages -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <h1>Multiplayer Analytics</h1>
+        <p class="muted">Demo — HTML + Plotly (GitHub Pages)</p>
+      </div>
+      <div class="controls">
+        <button id="refreshBtn">Refresh</button>
+      </div>
+    </header>
+
+    <section id="summary" class="grid summary-cards"></section>
+
+    <section class="grid two-col">
+      <div class="card" id="killsTrend"></div>
+      <div class="card" id="accuracyTrend"></div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="card" id="scoreImpact"></div>
+      <div class="card" id="kdDist"></div>
+    </section>
+
+    <section class="grid two-col">
+      <div class="card" id="mapPerf"></div>
+      <div class="card timeline-card">
+        <h3>Match Timeline</h3>
+        <div id="timeline" class="timeline"></div>
+      </div>
+    </section>
+
+    <footer class="muted">Data: static JSON (docs/data/matches.json). Replace with your real data later.</footer>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>
