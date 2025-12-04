@@ -1,1 +1,21 @@
+services:
+  - type: web
+    name: codm-backend
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DATA_PATH
+        value: "data/vedas_5match_stats.csv"
+
+static_sites:
+  - name: codm-frontend
+    env: node
+    plan: free
+    buildCommand: "cd frontend && npm install && npm run build"
+    publishPath: "frontend/dist"
+    envVars:
+      - key: VITE_API_BASE
+        value: "https://codm-backend-xxxxx.onrender.com"
 
