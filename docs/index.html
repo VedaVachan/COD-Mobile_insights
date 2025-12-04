@@ -4,11 +4,12 @@
   <meta charset="utf-8" />
   <title>Multiplayer Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- Plotly CDN -->
+  <!-- Plotly -->
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <!-- PapaParse for CSV upload (optional) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-  <!-- Relative path (no leading slash) for GitHub Pages -->
+  <!-- relative paths for GitHub Pages -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -19,7 +20,9 @@
         <p class="muted">Demo — HTML + Plotly (GitHub Pages)</p>
       </div>
       <div class="controls">
-        <button id="refreshBtn">Refresh</button>
+        <input id="csvFile" type="file" accept=".csv" style="display:none" />
+        <button id="uploadBtn" class="controls-btn">Upload CSV</button>
+        <button id="refreshBtn" class="controls-btn">Refresh</button>
       </div>
     </header>
 
@@ -43,7 +46,7 @@
       </div>
     </section>
 
-    <footer class="muted">Data: static JSON (docs/data/matches.json). Replace with your real data later.</footer>
+    <footer class="muted">Data: static JSON (docs/data/matches.json) — or upload CSV using the button.</footer>
   </div>
 
   <script src="main.js"></script>
