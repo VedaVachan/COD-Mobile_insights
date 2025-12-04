@@ -1,16 +1,11 @@
-// docs/main.js (improved)
+// docs/main.js (improved + weapons + profile wiring)
 (function () {
-  // Helper: safe query
   function $id(id) { return document.getElementById(id); }
-
-  // Robust parser for numbers
   function toNum(v, fallback = 0) {
     if (v === undefined || v === null || v === "") return fallback;
     const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
     return Number.isFinite(n) ? n : fallback;
   }
-
-  // Normalize boolean-like values
   function toBool(v) {
     if (typeof v === "boolean") return v;
     if (!v) return false;
@@ -18,45 +13,38 @@
     return s === "1" || s === "true" || s === "yes" || s === "y";
   }
 
-  // Map CSV rows (any header names) -> dashboard match object
+  function formatDate(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString();
+  }
+
+  // Map CSV rows -> match object
   function mapRowToMatch(r, i, baseDate) {
-    // Common header possibilities
-    const matchId = r.match || r.Match || r.id || r.ID || r["Match #"] || r["#"] || null;
-    const dateRaw = r.date || r.Date || r.played_at || r.Timestamp || null;
-    // If CSV has no date, synthesize from baseDate by subtracting days
+    const matchId = r.match || r.Match || r.id || r.ID || null;
+    const dateRaw = r.date || r.Date || null;
     let dateIso;
     if (dateRaw) {
-      // try to make ISO if it's already a date or simple string
       const d = new Date(dateRaw);
-      if (!isNaN(d)) dateIso = d.toISOString();
-      else dateIso = new Date(baseDate.getTime() - (i * 24*3600*1000)).toISOString();
+      dateIso = !isNaN(d) ? d.toISOString() : new Date(baseDate.getTime() - (i * 24*3600*1000)).toISOString();
     } else {
       dateIso = new Date(baseDate.getTime() - (i * 24*3600*1000)).toISOString();
     }
-
-    // map name variations
-    const mapName = r.map || r.Map || r["Map Name"] || r["Map"] || "Unknown";
-    const mode = r.mode || r.Mode || r["Game Mode"] || r["Mode"] || "Multiplayer";
-    const result = r.result || r.Result || r["Outcome"] || "";
-    const score = toNum(r.score || r.Score || r.Points || 0);
-    const kills = toNum(r.kills || r.Kills || r["Kill"] || 0);
-    const deaths = toNum(r.deaths || r.Deaths || r["Death"] || 0);
+    const mapName = r.map || r.Map || "Unknown";
+    const mode = r.mode || r.Mode || "Multiplayer";
+    const result = r.result || r.Result || "";
+    const score = toNum(r.score || r.Score || 0);
+    const kills = toNum(r.kills || r.Kills || 0);
+    const deaths = toNum(r.deaths || r.Deaths || 0);
     const assists = toNum(r.assists || r.Assists || 0);
-    const kd_ratio = toNum(r["kd_ratio"] || r["KD Ratio"] || r["K/D"] || r["KD"] || "");
+    const kd_ratio = toNum(r["kd_ratio"] || r["KD Ratio"] || "");
     const impact = toNum(r.impact || r.Impact || 0);
-    const accuracy = toNum(r.accuracy || r.Accuracy || r.Acc || 0);
+    const accuracy = toNum(r.accuracy || r.Accuracy || 0);
     const adr = toNum(r.adr || r.ADR || 0);
-    const firstKills = toNum(r.firstkills || r.FirstKills || r["First Kills"] || 0);
-    const loneWolfWins = toNum(r.lonewolfwins || r.LoneWolfWins || r["LoneWolfWins"] || r["Lone Wolf"] || 0);
-    const mvpVal = r.mvp || r.MVP || r["IsMVP"] || r["Mvp"] || r["MVP?"] || "";
-    const mvp = toBool(mvpVal);
-
-    // determine win boolean from Result text (detect 'win' case-insensitive)
+    const firstKills = toNum(r.firstkills || r.FirstKills || 0);
+    const loneWolfWins = toNum(r.lonewolfwins || r.LoneWolfWins || 0);
+    const mvp = toBool(r.mvp || r.MVP || "");
     const win = /win/i.test(String(result));
-
-    // duration: if present use it else estimate (S&D short)
-    const duration_min = toNum(r.duration_min || r.Duration || r["Duration (min)"], (mode && mode.toLowerCase().includes("s&d")) ? 18 : 15);
-
+    const duration_min = toNum(r.duration_min || r.Duration || (mode && mode.toLowerCase().includes("s&d") ? 18 : 15));
     return {
       id: matchId ? (toNum(matchId, null) || String(matchId)) : (i + 1),
       date: dateIso,
@@ -79,22 +67,15 @@
     };
   }
 
-  // ---- Existing visualization functions (unchanged) ----
-  function formatDate(iso) {
-    const d = new Date(iso);
-    return d.toLocaleDateString();
-  }
-
+  // Visualization functions (unchanged logic)
   function renderSummary(matches) {
     const container = $id("summary");
     if (!container) return;
     container.innerHTML = "";
-
     const total = matches.length || 0;
     const avg = (key) => (matches.reduce((s, m) => s + (toNum(m[key] || 0)), 0) / Math.max(1, total)) || 0;
     const wins = matches.filter(m => m.win).length;
     const mvps = matches.filter(m => m.mvp).length;
-
     const cards = [
       { title: "Total Matches", value: total },
       { title: "Avg Kills", value: avg("kills").toFixed(2) },
@@ -103,7 +84,6 @@
       { title: "Win Rate", value: ((wins / Math.max(1, total)) * 100).toFixed(1) + "%" },
       { title: "MVP Rate", value: ((mvps / Math.max(1, total)) * 100).toFixed(1) + "%" },
     ];
-
     for (const c of cards) {
       const el = document.createElement("div");
       el.className = "card summary-item";
@@ -160,7 +140,6 @@
     const maps = Object.keys(byMap);
     const avgKills = maps.map(mp => byMap[mp].kills / Math.max(1, byMap[mp].matches));
     const winRates = maps.map(mp => (byMap[mp].wins / Math.max(1, byMap[mp].matches)) * 100);
-
     const layout = { margin: { t: 40 }, title: "Map Performance (Avg Kills & Win%)", height: 340, yaxis2: { overlaying: "y", side: "right", title: "Win Rate (%)" } };
     const data = [
       { x: maps, y: avgKills, name: "Avg Kills", type: "bar" },
@@ -190,16 +169,13 @@
           <div class="muted">${m.accuracy}% • ${m.score} pts ${m.mvp ? ' • MVP' : ''}</div>
         </div>
       `;
-      // click event to view details (if desired)
       item.addEventListener("click", () => {
-        // simple detail alert — replace with modal if you like
         alert(`Match #${m.id}\nMap: ${m.map}\nMode: ${m.mode}\nScore: ${m.score}\nKills: ${m.kills} • Deaths: ${m.deaths} • Assists: ${m.assists}`);
       });
       container.appendChild(item);
     });
   }
 
-  // Render pipeline
   function renderAndDrawAll(matches) {
     renderSummary(matches);
     drawKillsTrend(matches);
@@ -210,7 +186,6 @@
     renderTimeline(matches);
   }
 
-  // Fetch static JSON (Pages) or throw
   async function fetchMatches() {
     const res = await window.fetch("data/matches.json");
     if (!res.ok) throw new Error("Failed to fetch matches.json: " + res.status);
@@ -222,9 +197,7 @@
     const uploadBtn = $id("uploadBtn");
     const csvFile = $id("csvFile");
     if (!uploadBtn || !csvFile || typeof Papa === "undefined") return;
-
     uploadBtn.addEventListener("click", () => csvFile.click());
-
     csvFile.addEventListener("change", (ev) => {
       const file = ev.target.files && ev.target.files[0];
       if (!file) return;
@@ -234,6 +207,8 @@
         complete: function(results) {
           const baseDate = new Date();
           const parsed = results.data.map((r, i) => mapRowToMatch(r, i, baseDate));
+          // expose to window for reuse
+          window.currentMatches = parsed;
           renderAndDrawAll(parsed);
         },
         error: function(err) {
@@ -243,13 +218,13 @@
     });
   }
 
-  // Refresh button wiring
   function initRefresh() {
     const refreshBtn = $id("refreshBtn");
     if (!refreshBtn) return;
     refreshBtn.addEventListener("click", async () => {
       try {
         const matches = await fetchMatches();
+        window.currentMatches = matches;
         renderAndDrawAll(matches);
       } catch (e) {
         alert("Failed to load static matches: " + e.message);
@@ -257,24 +232,39 @@
     });
   }
 
-  // Profile hero wiring (Overview / Matches / Plans) — safe wiring
+  // Profile button wiring
   function initProfileButtons() {
     const btnOverview = $id("btnOverview");
     const btnMatches = $id("btnMatches");
     const btnPlans = $id("btnPlans");
-    if (btnOverview) btnOverview.addEventListener("click", () => { $id("summary") && $id("summary").scrollIntoView({ behavior: "smooth" }); });
+    if (btnOverview) btnOverview.addEventListener("click", () => { $id("profileHero") && $id("profileHero").scrollIntoView({ behavior: "smooth", block: "start" }); });
     if (btnMatches) btnMatches.addEventListener("click", () => { $id("timeline") && $id("timeline").scrollIntoView({ behavior: "smooth", block: "center" }); });
-    if (btnPlans) btnPlans.addEventListener("click", () => { alert("Plans: Coming soon — customized training, map guides, and stat reports."); });
+    if (btnPlans) btnPlans.addEventListener("click", async () => {
+      // prefer currentMatches (CSV) else load static
+      try {
+        let matches = window.currentMatches;
+        if (!matches) {
+          const res = await fetch("data/matches.json");
+          if (res.ok) matches = await res.json();
+          else matches = [];
+        }
+        renderAndDrawAll(matches);
+      } catch (e) {
+        console.warn("Plans load warning:", e);
+      }
+      const dash = $id("dashboardSection") || $id("summary");
+      if (dash) dash.scrollIntoView({ behavior: "smooth", block: "start" });
+      const hero = $id("profileHero");
+      if (hero) hero.classList.add("collapsed");
+    });
   }
 
-  // Export button wiring (safe)
   function initExport() {
     const btnExport = $id("btnExport");
     if (!btnExport) return;
     btnExport.addEventListener("click", async () => {
       try {
-        const matches = await fetchMatches();
-        // simple CSV: header + values
+        const matches = window.currentMatches || await fetchMatches();
         const headers = Object.keys(matches[0] || {});
         const rows = matches.map(m => headers.map(h => {
           const v = m[h];
@@ -292,21 +282,81 @@
     });
   }
 
-  // On load: initialize everything
+  // Weapons section
+  (function(){
+    const WEAPONS_JSON = "data/weapons.json";
+    function renderWeaponsGrid(list) {
+      const grid = $id("weaponsGrid");
+      if (!grid) return;
+      grid.innerHTML = "";
+      list.forEach(w => {
+        const el = document.createElement("div");
+        el.className = "weapon-card";
+        el.innerHTML = `
+          <div class="weapon-thumb"><img src="${w.img}" alt="${w.name}" onerror="this.src='assets/weapons/placeholder.png'"/></div>
+          <div class="weapon-name">${w.name}</div>
+          <div class="rarity-badge ${w.rarity === 'mythic' ? 'rarity-mythic' : (w.rarity === 'legend' ? 'rarity-legend' : 'rarity-epic')}">${(w.rarity||'').toUpperCase()}</div>
+        `;
+        el.addEventListener("click", () => openWeaponModal(w));
+        grid.appendChild(el);
+      });
+    }
+    function defaultWeapons() {
+      return [
+        { id:"bp50", name:"BP50 - Ion Eruption", rarity:"mythic", img:"assets/weapons/bp50.jpg", desc:"Mythic shotgun."},
+        { id:"ak117", name:"AK117 - Lava Remix", rarity:"legend", img:"assets/weapons/ak117.jpg", desc:"Legend AR."},
+        { id:"qq9", name:"QQ9 - Dual Kinetics", rarity:"legend", img:"assets/weapons/qq9.jpg", desc:"SMG."}
+      ];
+    }
+    async function loadWeapons() {
+      try {
+        const res = await fetch(WEAPONS_JSON);
+        const weapons = res.ok ? await res.json() : defaultWeapons();
+        renderWeaponsGrid(weapons);
+        window._weapons = weapons;
+      } catch (e) {
+        console.warn("Weapons load failed:", e);
+        renderWeaponsGrid(defaultWeapons());
+      }
+    }
+    function openWeaponModal(w) {
+      const modal = $id("weaponModal");
+      if (!modal) return;
+      $id("weaponModalImg").src = w.img || "assets/weapons/placeholder.png";
+      $id("weaponModalName").textContent = w.name;
+      $id("weaponModalRarity").className = "rarity-badge " + (w.rarity === 'mythic' ? 'rarity-mythic' : (w.rarity === 'legend' ? 'rarity-legend' : 'rarity-epic'));
+      $id("weaponModalRarity").textContent = (w.rarity || "").toUpperCase();
+      $id("weaponModalDesc").textContent = w.desc || "";
+      modal.setAttribute("aria-hidden", "false");
+    }
+    $id("weaponModalClose").addEventListener("click", ()=> $id("weaponModal").setAttribute("aria-hidden","true"));
+    $id("weaponModal").addEventListener("click", (ev)=> { if (ev.target === $id("weaponModal")) $id("weaponModal").setAttribute("aria-hidden","true"); });
+    // filters
+    document.addEventListener("DOMContentLoaded", ()=> {
+      const fm = $id("filterMythic"), fl = $id("filterLegend"), sa = $id("showAllWeapons");
+      if (fm) fm.addEventListener("click", ()=> renderWeaponsGrid((window._weapons||defaultWeapons()).filter(w=>w.rarity==='mythic')));
+      if (fl) fl.addEventListener("click", ()=> renderWeaponsGrid((window._weapons||defaultWeapons()).filter(w=>w.rarity==='legend')));
+      if (sa) sa.addEventListener("click", ()=> renderWeaponsGrid(window._weapons||defaultWeapons()));
+      loadWeapons();
+    });
+  })();
+
+  // initialize
   document.addEventListener("DOMContentLoaded", async () => {
     initCsvUpload();
     initRefresh();
     initProfileButtons();
     initExport();
-
-    // Try load static JSON by default
     try {
       const matches = await fetchMatches();
+      window.currentMatches = matches;
       renderAndDrawAll(matches);
     } catch (e) {
-      // If static load fails, attempt no-op (CSV upload can still work)
       console.warn("Static JSON load failed:", e.message);
     }
   });
 
 })();
+
+          
+      
